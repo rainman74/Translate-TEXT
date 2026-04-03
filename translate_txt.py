@@ -149,12 +149,13 @@ def _postprocess(text, direction="en2de"):
     """Clean up LLM translation artifacts, apply glossary and grammar fixes."""
     # --- Strip LLM meta-output (review notes, explanations, headers) ---
     # The review pass sometimes outputs its working notes after the translation.
-    # Cut everything from the first meta-marker onward.
-    for marker in ['\nCorrected ', '\nChanges made', '\nChanges:', '\nNotes:',
-                   '\nExplanation:', '\nRevision:', '\nKorrektur:', '\nÄnderungen:']:
-        idx = text.find(marker)
-        if idx > 0:
-            text = text[:idx]
+    # 1) Regex catch-all: cut at any line that looks like meta-commentary
+    text = re.sub(
+        r'\n\s*(?:'
+        r'Corrected |Corrections?\s|Changes?\s|Notes?\s*:|Explanation|Revision'
+        r'|Korrektur|Änderungen|Übersetzung\s*[:(]|Translation\s'
+        r'|Original\s*[:(]|\(Translation\b|\(Korrektur\b|\(Übersetzung\b'
+        r').*', '', text, flags=re.DOTALL | re.IGNORECASE)
     # Strip wrapping quotes
     if len(text) > 2 and text[0] == '"' and text[-1] == '"':
         text = text[1:-1]
@@ -210,8 +211,34 @@ _MONTHS_DE = ('Januar|Februar|März|April|Mai|Juni|Juli|'
               'August|September|Oktober|November|Dezember')
 
 
+# English words that mistral-nemo occasionally leaves untranslated in German output.
+# Only words that are NEVER valid German words (no overlaps like "Hand", "Ring", etc.)
+_EN_LEAK_FIXES = {
+    'completely': 'völlig', 'however': 'jedoch', 'therefore': 'daher',
+    'furthermore': 'darüber hinaus', 'meanwhile': 'inzwischen',
+    'actually': 'tatsächlich', 'basically': 'grundsätzlich',
+    'essentially': 'im Wesentlichen', 'particularly': 'besonders',
+    'approximately': 'ungefähr', 'unfortunately': 'leider',
+    'immediately': 'sofort', 'obviously': 'offensichtlich',
+    'currently': 'derzeit', 'recently': 'kürzlich', 'previously': 'zuvor',
+    'additionally': 'zusätzlich', 'especially': 'besonders',
+    'significantly': 'erheblich', 'ultimately': 'letztendlich',
+    'apparently': 'offenbar', 'frequently': 'häufig',
+    'occasionally': 'gelegentlich', 'generally': 'im Allgemeinen',
+    'entirely': 'vollständig', 'merely': 'lediglich',
+    'slightly': 'leicht', 'largely': 'weitgehend',
+    'potentially': 'möglicherweise', 'relatively': 'relativ',
+    'increasingly': 'zunehmend', 'primarily': 'hauptsächlich',
+}
+
+
 def _fix_german(text):
     """Deterministic German grammar fixes — generic, rule-based."""
+
+    # --- English word leaks: replace stray English words ---
+    for en, de in _EN_LEAK_FIXES.items():
+        text = re.sub(rf'\b{en}\b', de, text, flags=re.IGNORECASE)
+
 
     # --- Neuter gender: "eine {Neutrum}" → "ein {Neutrum}" ---
     for noun in _NEUTER_NOUNS:
@@ -258,9 +285,10 @@ SYSTEM_TRANSLATE = (
     "- Produce natural, fluent {tgt} with correct grammar, gender, and case.\n"
     "- Use natural {tgt} sentence structure (e.g., V2 in German, SVO in English).\n"
     "  Do not mirror the syntax of {src}.\n"
-    "- Restructure passive constructions naturally. In German, use impersonal forms\n"
-    "  ('Es wird erzählt, dass …', 'Man sagt, …') instead of literal passives\n"
-    "  where the subject cannot logically be the patient of the verb.\n"
+    "- NEVER translate 'X is said to …' as 'X wird erzählt, dass …'.\n"
+    "  This is grammatically wrong in German. Use instead:\n"
+    "  'Es wird erzählt, dass X …' or 'Man sagt, X …'.\n"
+    "  Apply this to all similar passive constructions with personal subjects.\n"
     "- Use exclusively established {tgt} vocabulary. Never invent compound words.\n"
     "  If unsure, use a descriptive phrase instead.\n"
     "- Translate ALL terms completely. No {src} expressions may remain.\n"
@@ -280,8 +308,8 @@ SYSTEM_REVIEW = (
     "  Ensure every proper noun and title has its required article.\n"
     "- Vocabulary: replace invented compound words with real {tgt} words or descriptive phrases.\n"
     "- Idiomatic correctness: replace word-for-word translations with natural {tgt} phrasing.\n"
-    "  Fix unnatural passive constructions (e.g., 'X wird erzählt' → 'Man erzählt, dass X' or\n"
-    "  'Es wird erzählt, dass X').\n"
+    "  Fix unnatural passive constructions (e.g., 'X wird erzählt' → 'Man erzählt, dass X').\n"
+    "  Fix unnatural genitive order (e.g., 'jedes Kindes Haus' → 'das Haus jedes Kindes').\n"
     "- Structural integrity: do not add or omit information. Match the original precisely.\n"
     "- Do not add headings, labels, or section titles not present in the original.\n"
     "- CRITICAL: Output ONLY the corrected {tgt} text.\n"
