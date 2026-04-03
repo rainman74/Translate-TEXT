@@ -97,3 +97,12 @@ Settings in `translate_txt.py`:
 - **Context blocks**: 5 context blocks provide the most consistent terminology and style across the entire document.
 - **Temperature**: Keep at `0.05` for reliable, reproducible translations. Only increase if the model produces repetitive or stuck output.
 - **Post-processing**: The built-in German grammar fixes handle common LLM errors automatically. For domain-specific terminology, consider adding regex patterns to `_fix_german()` in `translate_txt.py`.
+
+---
+
+## Example translations
+
+Two C1-level English texts with their German translations are included as examples:
+
+- `Englisch1.txt` → `Englisch1.DE.txt`
+- `Englisch2.txt` → `Englisch2.DE.txt`
