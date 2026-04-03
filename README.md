@@ -102,7 +102,7 @@ Settings in `translate_txt.py`:
 
 ## Example translations
 
-Two C1-level English texts with their German translations are included as examples:
+Two C1-level English texts (from https://lingua.com/de/englisch/lesen/) with their German translations are included as examples:
 
 - `Englisch1.txt` → `Englisch1.DE.txt`
 - `Englisch2.txt` → `Englisch2.DE.txt`
